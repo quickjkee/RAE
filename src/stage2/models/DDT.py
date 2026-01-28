@@ -378,16 +378,14 @@ class DiTwDDTHead(nn.Module):
             x = x + self.x_pos_embed
 
         if self.registers_len > 0:
-            s = s[:, self.registers_len:]
-
             registers = s[:, :self.registers_len]
             x = torch.cat([registers, x], dim=1)
 
         for i in range(self.num_encoder_blocks, self.num_blocks):
             x = self.blocks[i](x, s, feat_rope=self.dec_feat_rope)
-        x = x[:, self.registers_len:]
 
         x = self.final_layer(x, s)
+        x = x[:, self.registers_len:]
         x = self.unpatchify(x)
 
         return x
