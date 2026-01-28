@@ -198,6 +198,8 @@ class DiTwDDTHead(nn.Module):
             use_rmsnorm=True,
             wo_shift=False,
             use_pos_embed: bool = True,
+            registers_len=0,
+            registers_start=0
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -246,6 +248,14 @@ class DiTwDDTHead(nn.Module):
                 1, num_patches, self.encoder_hidden_size), requires_grad=False)
             self.x_pos_embed = None
         self.use_pos_embed = use_pos_embed
+
+        # register tokens
+        self.registers_len = registers_len
+        self.registers_start = registers_start
+        if self.registers_len > 0:
+            self.register_tokens = nn.Parameter(torch.zeros(1, self.registers_len, hidden_size), requires_grad=True)
+            torch.nn.init.normal_(self.register_tokens, std=.02)
+
         enc_num_heads = self.num_heads[0]
         dec_num_heads = self.num_heads[1]
         # use rotary position encoding, borrow from EVA
@@ -337,28 +347,42 @@ class DiTwDDTHead(nn.Module):
         return imgs
 
     def forward(self, x, t, y, s=None, mask=None):
-        # x = self.x_embedder(x) + self.pos_embed
+        # Input
         t = self.t_embedder(t)
         y = self.y_embedder(y, self.training)
         c = nn.functional.silu(t + y)
+
+        # Encoder
         if s is None:
             s = self.s_embedder(x)
             if self.use_pos_embed:
                 s = s + self.pos_embed
-            # print(f"t shape: {t.shape}, y shape: {y.shape}, c shape: {c.shape}, s shape: {s.shape}, pos_embed shape: {self.pos_embed.shape}")
             for i in range(self.num_encoder_blocks):
+                if self.registers_len > 0 and i == self.registers_start:
+                    register_tokens = self.register_tokens.expand(s.shape[0], -1, -1)
+                    s = torch.cat([register_tokens, s], dim=1)
                 s = self.blocks[i](s, c, feat_rope=self.enc_feat_rope)
-            # broadcast t to s
             t = t.unsqueeze(1).repeat(1, s.shape[1], 1)
             s = nn.functional.silu(t + s)
+
+        # Decoder
         s = self.s_projector(s)
         x = self.x_embedder(x)
         if self.use_pos_embed and self.x_pos_embed is not None:
             x = x + self.x_pos_embed
+
+        if self.registers_len > 0:
+            s = s[:, self.registers_len:]
+            registers = s[:, :self.registers_len]
+            x = torch.cat([registers, x], dim=1)
+
         for i in range(self.num_encoder_blocks, self.num_blocks):
             x = self.blocks[i](x, s, feat_rope=self.dec_feat_rope)
+        x = x[:, self.registers_len:]
+
         x = self.final_layer(x, s)
         x = self.unpatchify(x)
+
         return x
 
     def forward_with_cfg(self, x, t, y, cfg_scale, cfg_interval=(0, 1)):
