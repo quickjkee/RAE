@@ -370,7 +370,9 @@ class DiTwDDTHead(nn.Module):
                 if self.registers_len > 0 and i == self.registers_start:
                     register_tokens = self.register_tokens.expand(s.shape[0], -1, -1)
                     s = torch.cat([register_tokens, s], dim=1)
-                s = self.blocks[i](s, c, feat_rope=self.enc_feat_rope if i < self.registers_start else self.enc_feat_rope_registers)
+                use_reg_rope = (self.registers_len > 0) and (i >= self.registers_start)
+                feat_rope = self.enc_feat_rope_registers if use_reg_rope else self.enc_feat_rope
+                s = self.blocks[i](s, c, feat_rope=feat_rope)
             t = t.unsqueeze(1).repeat(1, s.shape[1], 1)
             s = nn.functional.silu(t + s)
 
