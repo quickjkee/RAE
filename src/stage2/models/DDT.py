@@ -267,11 +267,14 @@ class DiTwDDTHead(nn.Module):
                 dim=enc_half_head_dim,
                 pt_seq_len=hw_seq_len,
             )
-            self.enc_feat_rope_registers = VisionRotaryEmbeddingFast(
-                dim=enc_half_head_dim,
-                pt_seq_len=hw_seq_len,
-                num_cls_token=self.registers_len
-            )
+            if self.registers_len > 0:
+                self.enc_feat_rope_registers = VisionRotaryEmbeddingFast(
+                    dim=enc_half_head_dim,
+                    pt_seq_len=hw_seq_len,
+                    num_cls_token=self.registers_len
+                )
+            else:
+                self.enc_feat_rope_registers = None
             dec_half_head_dim = self.decoder_hidden_size // dec_num_heads // 2
             hw_seq_len = int(sqrt(self.x_embedder.num_patches))
             # print(f"dec_half_head_dim: {dec_half_head_dim}, hw_seq_len: {hw_seq_len}")
