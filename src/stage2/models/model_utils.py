@@ -147,6 +147,7 @@ class VisionRotaryEmbeddingFast(nn.Module):
         theta=10000,
         max_freq=10,
         num_freqs=1,
+        num_cls_token = 0
     ):
         super().__init__()
         if custom_freqs:
@@ -168,8 +169,21 @@ class VisionRotaryEmbeddingFast(nn.Module):
         freqs = repeat(freqs, '... n -> ... (n r)', r=2)
         freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim=-1)
 
-        freqs_cos = freqs.cos().view(-1, freqs.shape[-1])
-        freqs_sin = freqs.sin().view(-1, freqs.shape[-1])
+        if num_cls_token > 0:
+            freqs_flat = freqs.view(-1, freqs.shape[-1])  # [N_img, D]
+            cos_img = freqs_flat.cos()
+            sin_img = freqs_flat.sin()
+
+            # prepend in-context cls token
+            N_img, D = cos_img.shape
+            cos_pad = torch.ones(num_cls_token, D, dtype=cos_img.dtype, device=cos_img.device)
+            sin_pad = torch.zeros(num_cls_token, D, dtype=sin_img.dtype, device=sin_img.device)
+
+            freqs_cos = torch.cat([cos_pad, cos_img], dim=0).cuda()  # [N_cls+N_img, D]
+            freqs_sin = torch.cat([sin_pad, sin_img], dim=0).cuda()
+        else:
+            freqs_cos = freqs.cos().view(-1, freqs.shape[-1]).cuda()
+            freqs_sin = freqs.sin().view(-1, freqs.shape[-1]).cuda()
 
         self.register_buffer("freqs_cos", freqs_cos)
         self.register_buffer("freqs_sin", freqs_sin)

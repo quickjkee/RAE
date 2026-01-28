@@ -253,7 +253,7 @@ class DiTwDDTHead(nn.Module):
         self.registers_len = registers_len
         self.registers_start = registers_start
         if self.registers_len > 0:
-            self.register_tokens = nn.Parameter(torch.zeros(1, self.registers_len, hidden_size), requires_grad=True)
+            self.register_tokens = nn.Parameter(torch.zeros(1, self.registers_len, self.encoder_hidden_size), requires_grad=True)
             torch.nn.init.normal_(self.register_tokens, std=.02)
 
         enc_num_heads = self.num_heads[0]
@@ -267,12 +267,18 @@ class DiTwDDTHead(nn.Module):
                 dim=enc_half_head_dim,
                 pt_seq_len=hw_seq_len,
             )
+            self.enc_feat_rope_registers = VisionRotaryEmbeddingFast(
+                dim=enc_half_head_dim,
+                pt_seq_len=hw_seq_len,
+                num_cls_token=self.registers_len
+            )
             dec_half_head_dim = self.decoder_hidden_size // dec_num_heads // 2
             hw_seq_len = int(sqrt(self.x_embedder.num_patches))
             # print(f"dec_half_head_dim: {dec_half_head_dim}, hw_seq_len: {hw_seq_len}")
             self.dec_feat_rope = VisionRotaryEmbeddingFast(
                 dim=dec_half_head_dim,
                 pt_seq_len=hw_seq_len,
+                num_cls_token=self.registers_len
             )
         else:
             self.feat_rope = None
@@ -361,7 +367,7 @@ class DiTwDDTHead(nn.Module):
                 if self.registers_len > 0 and i == self.registers_start:
                     register_tokens = self.register_tokens.expand(s.shape[0], -1, -1)
                     s = torch.cat([register_tokens, s], dim=1)
-                s = self.blocks[i](s, c, feat_rope=self.enc_feat_rope)
+                s = self.blocks[i](s, c, feat_rope=self.enc_feat_rope if i < self.registers_start else self.enc_feat_rope_registers)
             t = t.unsqueeze(1).repeat(1, s.shape[1], 1)
             s = nn.functional.silu(t + s)
 
@@ -373,6 +379,7 @@ class DiTwDDTHead(nn.Module):
 
         if self.registers_len > 0:
             s = s[:, self.registers_len:]
+
             registers = s[:, :self.registers_len]
             x = torch.cat([registers, x], dim=1)
 
