@@ -31,6 +31,7 @@ import math
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import LambdaLR
 from omegaconf import OmegaConf
+from yt_tools.nirvana_utils import copy_snapshot_to_out, copy_out_to_snapshot
 
 
 ##### model imports
@@ -332,7 +333,7 @@ def main():
     ### Resuming and checkpointing
     start_epoch = 0
     global_step = 0
-    maybe_resume_ckpt_path = find_resume_checkpoint(experiment_dir)
+    maybe_resume_ckpt_path = find_resume_checkpoint(checkpoint_dir)
     if maybe_resume_ckpt_path is not None:
         logger.info(f"Experiment resume checkpoint found at {maybe_resume_ckpt_path}, automatically resuming...")
         ckpt_path = Path(maybe_resume_ckpt_path)
@@ -352,6 +353,7 @@ def main():
         if rank == 0:
             save_worktree(experiment_dir, full_cfg)
             logger.info(f"Saved training worktree and config to {experiment_dir}.")
+
     ### Logging experiment details
     if rank == 0:
         num_params = sum(p.numel() for p in rae.parameters())
@@ -390,6 +392,7 @@ def main():
                 optimizer,
                 scheduler,
             )
+            copy_out_to_snapshot(experiment_dir)
         for step, (images, labels) in enumerate(loader):
             images = images.to(device)
             labels = labels.to(device)
