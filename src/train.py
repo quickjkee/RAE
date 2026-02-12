@@ -492,6 +492,9 @@ def main():
                 logger.info("Evaluation done.")
             global_step += 1
             num_batches += 1
+            if global_step % steps_per_epoch == 0:
+                break
+
         if rank == 0 and num_batches > 0:
             avg_loss = epoch_metrics['loss'].item() / num_batches 
             epoch_stats = {

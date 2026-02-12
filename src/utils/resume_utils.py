@@ -56,7 +56,6 @@ def find_resume_checkpoint(resume_dir) -> Optional[str]:
     print(os.listdir(resume_dir))
     print(os.listdir(checkpoint_dir))
 
-
     checkpoints = [
         os.path.join(checkpoint_dir, f)
         for f in os.listdir(checkpoint_dir)
