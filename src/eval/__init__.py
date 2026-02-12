@@ -10,7 +10,7 @@ from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from typing import Dict, Optional
-from src.sample_ddp import build_label_sampler
+from sample_ddp import build_label_sampler
 import os
 import math
 import sys
