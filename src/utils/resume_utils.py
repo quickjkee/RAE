@@ -40,6 +40,7 @@ def find_resume_checkpoint(resume_dir) -> Optional[str]:
     if not os.path.exists(checkpoint_dir):
         raise ValueError(f"Checkpoint directory {checkpoint_dir} does not exist.")
 
+    """
     potential_previous = os.environ.get("EXPERIMENT_NAME")
     potential_previous = f'/slot/sandbox/d/in/data/0_data_unpacked/{potential_previous}'
     checkpoint_dir_prev = Path(potential_previous)
@@ -51,6 +52,10 @@ def find_resume_checkpoint(resume_dir) -> Optional[str]:
         print(f"Moved files from {checkpoint_dir_prev} to {target_dir}")
     else:
         print("No files to move.")
+    """
+    print(os.listdir(resume_dir))
+    print(os.listdir(checkpoint_dir))
+
 
     checkpoints = [
         os.path.join(checkpoint_dir, f)
