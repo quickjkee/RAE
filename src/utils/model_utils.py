@@ -9,6 +9,7 @@ import torch
 import os
 import torchvision.transforms as transforms
 from utils.train_utils import center_crop_arr, np_chw_to_pil
+from yt_tools.utils import instantiate_from_config as instantiate_from_config2
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -39,7 +40,7 @@ def create_dataloader(dataloader_config_path: str, batch_size: int, skip_rows=0)
     with open(dataloader_config_path) as f:
         dataloader_config = OmegaConf.create(yaml.load(f, Loader=yaml.SafeLoader))
     dataloader_config["params"]["batch_size"] = batch_size
-    return instantiate_from_config(dataloader_config, skip_rows=skip_rows)
+    return instantiate_from_config2(dataloader_config, skip_rows=skip_rows)
 
 
 def unpack_batch(batch, args):
@@ -48,7 +49,7 @@ def unpack_batch(batch, args):
     else:
         transform_train = transforms.Compose([
                             transforms.Lambda(np_chw_to_pil),
-                            transforms.Lambda(lambda img: center_crop_arr(img, args.img_size)),
+                            transforms.Lambda(lambda img: center_crop_arr(img, args.image_size)),
                             transforms.RandomHorizontalFlip(),
                             transforms.PILToTensor()
                         ])

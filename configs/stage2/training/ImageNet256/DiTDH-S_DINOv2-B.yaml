@@ -77,8 +77,8 @@ training:
   ema_decay: 0.9995
   num_workers: 16
   log_interval: 100
-  checkpoint_interval: 10
-  sample_every: 2500 # every 2 epoch
+  checkpoint_interval: 50
+  sample_every: 25000000 # every 2 epoch
   clip_grad: 1.0
   global_seed: 42
   optimizer:

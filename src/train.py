@@ -467,6 +467,7 @@ def main():
                     eval_models.append((model_fn, "model"))
                 for fn, mod_name in eval_models:
                     eval_stats = evaluate_generation_distributed(
+                        args,
                         fn,
                         eval_sampler,
                         latent_size,

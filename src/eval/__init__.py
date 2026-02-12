@@ -65,6 +65,7 @@ def compute_generation_metrics(
     }
 @torch.no_grad()
 def evaluate_generation_distributed(
+    args,
     model_fn,
     sample_fn,
     latent_size, # for noise 
@@ -124,7 +125,7 @@ def evaluate_generation_distributed(
 
     generations = []
     label_sampler = build_label_sampler(
-        args.label_sampling,
+        'equal',
         1000,
         50000,
         total_samples,

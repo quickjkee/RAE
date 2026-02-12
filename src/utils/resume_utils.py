@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 import shutil
 from .wandb_utils import initialize, create_logger
 import logging
+from pathlib import Path
 
 def configure_experiment_dirs(args, rank) -> Tuple[str, str, logging.Logger]:
     experiment_name = os.environ.get("EXPERIMENT_NAME")
@@ -24,6 +25,7 @@ def configure_experiment_dirs(args, rank) -> Tuple[str, str, logging.Logger]:
     else:
         logger = create_logger(None, 'rae')
     return experiment_dir, checkpoint_dir, logger
+
 def find_resume_checkpoint(resume_dir) -> Optional[str]:
     """
     Find the latest checkpoint file in the resume directory.
@@ -37,6 +39,19 @@ def find_resume_checkpoint(resume_dir) -> Optional[str]:
     checkpoint_dir = os.path.join(resume_dir, "checkpoints")
     if not os.path.exists(checkpoint_dir):
         raise ValueError(f"Checkpoint directory {checkpoint_dir} does not exist.")
+
+    potential_previous = os.environ.get("EXPERIMENT_NAME")
+    potential_previous = f'/slot/sandbox/d/in/data/0_data_unpacked/{potential_previous}'
+    checkpoint_dir_prev = Path(potential_previous)
+    target_dir = Path(checkpoint_dir)
+    if checkpoint_dir_prev.exists() and any(checkpoint_dir_prev.iterdir()):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for item in checkpoint_dir_prev.iterdir():
+            shutil.move(str(item), target_dir / item.name)
+        print(f"Moved files from {checkpoint_dir_prev} to {target_dir}")
+    else:
+        print("No files to move.")
+
     checkpoints = [
         os.path.join(checkpoint_dir, f)
         for f in os.listdir(checkpoint_dir)
