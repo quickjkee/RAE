@@ -4,7 +4,11 @@ from typing import Union, Tuple, Optional
 from stage1 import RAE
 import torch.nn as nn
 from omegaconf import OmegaConf
+import yaml
 import torch
+import os
+import torchvision.transforms as transforms
+from utils.train_utils import center_crop_arr, np_chw_to_pil
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -29,4 +33,26 @@ def instantiate_from_config(config) -> object:
         model.load_state_dict(state_dict, strict=True)
         print(f'target {config["target"]} loaded from {ckpt_path}')
     return model
+
+
+def create_dataloader(dataloader_config_path: str, batch_size: int, skip_rows=0):
+    with open(dataloader_config_path) as f:
+        dataloader_config = OmegaConf.create(yaml.load(f, Loader=yaml.SafeLoader))
+    dataloader_config["params"]["batch_size"] = batch_size
+    return instantiate_from_config(dataloader_config, skip_rows=skip_rows)
+
+
+def unpack_batch(batch, args):
+    if os.path.exists(args.data_path):
+        x, y = batch
+    else:
+        transform_train = transforms.Compose([
+                            transforms.Lambda(np_chw_to_pil),
+                            transforms.Lambda(lambda img: center_crop_arr(img, args.img_size)),
+                            transforms.RandomHorizontalFlip(),
+                            transforms.PILToTensor()
+                        ])
+        x = torch.stack([transform_train(img) for img in batch['image']])
+        y = torch.tensor(batch['label'])
+    return x, y
 

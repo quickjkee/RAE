@@ -10,8 +10,13 @@ from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from typing import Dict, Optional
+from src.sample_ddp import build_label_sampler
 import os
+import math
 import sys
+
+
+
 def compute_reconstruction_metrics(
     ref_arr: np.ndarray,
     rec_arr: np.ndarray,
@@ -66,7 +71,6 @@ def evaluate_generation_distributed(
     additional_model_kwargs,
     use_guidance: bool,
     rae, 
-    val_dataset,
     num_samples: int,
     batch_size: int,
     rank: int,
@@ -102,42 +106,41 @@ def evaluate_generation_distributed(
     if rank == 0:
         print(f"\n[Eval] Starting distributed sampling evaluation at step {global_step}")
         os.makedirs(temp_dir, exist_ok=True)
-
-    # Wait for rank 0 to create the directory before other ranks try to save
     dist.barrier()
-    # print(f"[Rank {rank}] Starting sampling...")
+
     # Each rank processes its shard
-    N = min(len(val_dataset), num_samples)
-    chunk = N // world_size
+    n = batch_size
+    global_batch_size = n * world_size
+    total_samples = int(math.ceil(50000 / global_batch_size) * global_batch_size)
+    if rank == 0:
+        print(f"Total number of images that will be sampled: {total_samples}")
+    if total_samples % world_size != 0:
+        raise ValueError("Total samples must be divisible by world size.")
+    samples_needed_this_gpu = total_samples // world_size
+    if samples_needed_this_gpu % n != 0:
+        raise ValueError("Per-rank sample count must be divisible by the per-GPU batch size.")
+    iterations = samples_needed_this_gpu // n
+    pbar = tqdm(range(iterations)) if rank == 0 else range(iterations)
 
-    if rank < world_size - 1:
-        start = rank * chunk
-        end   = (rank + 1) * chunk
-    else:
-        # Last rank takes the remainder (and handles N < world_size gracefully)
-        start = rank * chunk
-        end   = N
-
-    rank_indices = list(range(start, end))
-    subset = Subset(val_dataset, rank_indices)
-    loader = DataLoader(
-        subset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        drop_last=False,
+    generations = []
+    label_sampler = build_label_sampler(
+        args.label_sampling,
+        1000,
+        50000,
+        total_samples,
+        samples_needed_this_gpu,
+        n,
+        device,
+        rank,
+        iterations,
+        0,
     )
 
-    # Reconstruct images on this rank
-    generations = []
-    iterator = tqdm(loader, desc=f"[Rank {rank}] Sampling", file=sys.stdout) if rank == 0 else loader
-
     with torch.inference_mode():
-        for _, label in iterator: # don't actually need images at sampling time
-            n = label.size(0)
-            z = torch.randn(n, *latent_size, device = device)
-            y = label.to(device)
+        for step_idx in pbar:
+            z = torch.randn(n, *latent_size, device=device)
+            y = label_sampler(step_idx)
+            n = y.size(0)
             if use_guidance:
                 z = torch.cat([z, z], dim=0)
                 y_null = torch.full((n,), null_label, device=device)

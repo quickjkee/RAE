@@ -5,6 +5,7 @@
 A minimal training script for SiT using PyTorch DDP.
 """
 import argparse
+from ast import arg
 import logging
 import math
 import os
@@ -41,7 +42,7 @@ from stage2.transport import create_transport, Sampler
 
 ##### general utils
 from utils import wandb_utils
-from utils.model_utils import instantiate_from_config
+from utils.model_utils import instantiate_from_config, create_dataloader, unpack_batch
 from utils.train_utils import *
 from utils.optim_utils import build_optimizer, build_scheduler
 from utils.resume_utils import *
@@ -92,6 +93,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=str, required=True, help="YAML config containing stage_1 and stage_2 sections.")
     parser.add_argument("--data-path", type=Path, required=True, help="Directory with ImageFolder structure for training.")
     parser.add_argument("--results-dir", type=str, default="ckpts", help="Directory to store training outputs.")
+    parser.add_argument('--yt_config_path', default='configs/imagenet_yt_config.yaml', type=str,
+                        help='Path to the config of imagenet dataset')
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256, help="Input image resolution.")
     parser.add_argument("--precision", type=str, choices=["fp32", "fp16", "bf16"], default="fp32", help="Compute precision for training.")
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging.")
@@ -100,6 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--global-seed", type=int, default=None, help="Override training.global_seed from the config.")
     args = parser.parse_args()
     return args
+
 def main():
     """Trains a new SiT model using config-driven hyperparameters."""
     args = parse_args()
@@ -249,24 +253,18 @@ def main():
     
     
     ### Data init
-    stage2_transform = transforms.Compose([
-        transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-    ])
-    loader, sampler = prepare_dataloader(
-        args.data_path, micro_batch_size, num_workers, rank, world_size, transform=stage2_transform
-    )
-    if do_eval:
-        eval_dataset = ImageFolder(
-            str(eval_data),
-            transform=transforms.Compose([
-                transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
-                transforms.ToTensor(),
-            ])
+    if os.path.exists(args.data_path):
+        stage2_transform = transforms.Compose([
+            transforms.Lambda(lambda pil_image: center_crop_arr(pil_image, args.image_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+        ])
+        loader, sampler = prepare_dataloader(
+            args.data_path, micro_batch_size, num_workers, rank, world_size, transform=stage2_transform
         )
-        logger.info(f"Evaluation dataset loaded from {eval_data}, containing {len(eval_dataset)} images.")
-        
+    else:
+        loader = create_dataloader(args.yt_config_path, micro_batch_size)
+
     loader_batches = len(loader)
     if loader_batches % grad_accum_steps != 0:
         raise ValueError("Number of loader batches must be divisible by grad_accum_steps when drop_last=True.")
@@ -290,7 +288,6 @@ def main():
         eval_sampler = transport_sampler.sample_sde(**sampler_params)
     else:
         raise NotImplementedError(f"Invalid sampling mode {sampler_mode}.")
-    
     
     ### Guidance Init
     guid_model_forward = None
@@ -374,7 +371,8 @@ def main():
     dist.barrier() 
     for epoch in range(start_epoch, num_epochs):
         model.train()
-        sampler.set_epoch(epoch)
+        if os.path.exists(args.data_path):
+            sampler.set_epoch(epoch)
         epoch_metrics: Dict[str, torch.Tensor] = defaultdict(lambda: torch.zeros(1, device=device))
         num_batches = 0
         optimizer.zero_grad()
@@ -393,7 +391,9 @@ def main():
                 scheduler,
             )
             copy_out_to_snapshot(experiment_dir)
-        for step, (images, labels) in enumerate(loader):
+
+        for step, batch in enumerate(loader):
+            images, labels = unpack_batch(batch, args=args)
             images = images.to(device)
             labels = labels.to(device)
             with torch.no_grad(): # TODO: wrap this in autocast?
@@ -473,8 +473,7 @@ def main():
                         sample_model_kwargs,
                         use_guidance,
                         rae, 
-                        eval_dataset,
-                        len(eval_dataset),
+                        500000,
                         rank = rank,
                         world_size = world_size,
                         device = device,

@@ -108,3 +108,9 @@ def get_autocast_scaler(args) -> Tuple[dict, torch.cuda.amp.GradScaler | None]:
         autocast_kwargs = dict(enabled=False)
     
     return scaler, autocast_kwargs
+
+def np_chw_to_pil(img: np.ndarray) -> Image.Image:
+    # if channel-first (C,H,W), convert to (H,W,C)
+    if img.ndim == 3 and img.shape[0] in (1, 3, 4) and img.shape[0] != img.shape[-1]:
+        img = np.transpose(img, (1, 2, 0))
+    return Image.fromarray(img)
