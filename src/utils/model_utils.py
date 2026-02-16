@@ -51,7 +51,7 @@ def unpack_batch(batch, args):
                             transforms.Lambda(np_chw_to_pil),
                             transforms.Lambda(lambda img: center_crop_arr(img, args.image_size)),
                             transforms.RandomHorizontalFlip(),
-                            transforms.PILToTensor()
+                            transforms.ToTensor()
                         ])
         x = torch.stack([transform_train(img) for img in batch['image']])
         y = torch.tensor(batch['label'])
