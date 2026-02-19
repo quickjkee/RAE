@@ -47,13 +47,7 @@ def unpack_batch(batch, args):
     if os.path.exists(args.data_path):
         x, y = batch
     else:
-        transform_train = transforms.Compose([
-                            transforms.Lambda(np_chw_to_pil),
-                            transforms.Lambda(lambda img: center_crop_arr(img, args.image_size)),
-                            transforms.RandomHorizontalFlip(),
-                            transforms.ToTensor()
-                        ])
-        x = torch.stack([transform_train(img) for img in batch['image']])
+        x = batch['image']
         y = torch.tensor(batch['label'])
     return x, y
 
