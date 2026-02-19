@@ -52,6 +52,28 @@ from utils.dist_utils import *
 ##### Eval utils
 from eval import evaluate_generation_distributed
 
+
+def keep_last_k_epoch_checkpoints(checkpoint_dir: str, k: int = 3):
+    paths = glob(os.path.join(checkpoint_dir, "ep-*.pt"))
+
+    def epoch_from_name(p):
+        # expects ep-0000123.pt
+        base = os.path.basename(p)
+        stem, _ = os.path.splitext(base)
+        try:
+            return int(stem.split("-")[1])
+        except (IndexError, ValueError):
+            return -1  # treat malformed names as old
+
+    paths_sorted = sorted(paths, key=epoch_from_name)
+    to_delete = paths_sorted[:-k] if len(paths_sorted) > k else []
+
+    for p in to_delete:
+        try:
+            os.remove(p)
+        except OSError:
+            pass  # or logger.warning(...)
+
 def save_checkpoint(
     path: str,
     step: int,
@@ -390,6 +412,7 @@ def main():
                 optimizer,
                 scheduler,
             )
+            keep_last_k_epoch_checkpoints(checkpoint_dir, k=3)
             copy_out_to_snapshot(experiment_dir)
 
         for step, batch in enumerate(loader):
