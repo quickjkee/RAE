@@ -31,7 +31,9 @@ stage_2:
     use_rmsnorm: true
     wo_shift: false
     use_pos_embed: true
-    
+    registers_len: 32
+    registers_start: 10
+
 transport:
   params:
     path_type: 'Linear'
