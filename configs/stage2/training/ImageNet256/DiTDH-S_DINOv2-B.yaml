@@ -63,7 +63,7 @@ misc:
   time_dist_shift_base: 4096
 
 eval:
-  eval_interval: 25000 # every 20 epochs
+  eval_interval: 50000 # every 20 epochs
   eval_model: true
   data_path: '/slot/sandbox/d/in/data/0_data_unpacked/mnt/data/imagenet/val/'
   reference_npz_path: '/slot/sandbox/d/in/data/0_data_unpacked/VIRTUAL_imagenet256_labeled.npz'
@@ -77,7 +77,7 @@ training:
   ema_decay: 0.9995
   num_workers: 16
   log_interval: 100
-  checkpoint_interval: 15
+  checkpoint_interval: 40
   sample_every: 25000000 # every 2 epoch
   clip_grad: 1.0
   global_seed: 42

@@ -184,7 +184,7 @@ def main():
     num_workers = int(training_cfg.get("num_workers", 4))
     log_interval = int(training_cfg.get("log_interval", 100))
     sample_every = int(training_cfg.get("sample_every", 2500)) 
-    checkpoint_interval = int(training_cfg.get("checkpoint_interval", 4)) # ckpt interval is epoch based
+    checkpoint_interval = int(training_cfg.get("checkpoint_interval", 40)) # ckpt interval is epoch based
     cfg_scale_override = training_cfg.get("cfg_scale", None)
     default_seed = int(training_cfg.get("global_seed", 0))
     
@@ -193,7 +193,7 @@ def main():
         FID online evaluation setup
         """
         do_eval = True
-        eval_interval = int(eval_config.get("eval_interval", 5000))
+        eval_interval = int(eval_config.get("eval_interval", 50000))
         eval_model = eval_config.get("eval_model", False) # by default eval ema. This decides whether to **additionally** eval the non-ema model.
         eval_data = eval_config.get("data_path", None)
         reference_npz_path = eval_config.get("reference_npz_path", None)
