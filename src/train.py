@@ -352,7 +352,7 @@ def main():
     ### Resuming and checkpointing
     start_epoch = 0
     global_step = 0
-    maybe_resume_ckpt_path = find_resume_checkpoint(experiment_dir)
+    maybe_resume_ckpt_path = find_resume_checkpoint(experiment_dir, rank)
     if maybe_resume_ckpt_path is not None:
         logger.info(f"Experiment resume checkpoint found at {maybe_resume_ckpt_path}, automatically resuming...")
         ckpt_path = Path(maybe_resume_ckpt_path)

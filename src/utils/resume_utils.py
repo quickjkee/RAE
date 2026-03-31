@@ -26,7 +26,7 @@ def configure_experiment_dirs(args, rank) -> Tuple[str, str, logging.Logger]:
         logger = create_logger(None, 'rae')
     return experiment_dir, checkpoint_dir, logger
 
-def find_resume_checkpoint(resume_dir) -> Optional[str]:
+def find_resume_checkpoint(resume_dir, rank) -> Optional[str]:
     """
     Find the latest checkpoint file in the resume directory.
     Args:
@@ -47,7 +47,8 @@ def find_resume_checkpoint(resume_dir) -> Optional[str]:
     if checkpoint_dir_prev.exists() and any(checkpoint_dir_prev.iterdir()):
         target_dir.mkdir(parents=True, exist_ok=True)
         for item in checkpoint_dir_prev.iterdir():
-            shutil.move(str(item), target_dir / item.name)
+            if rank == 0:
+                shutil.move(str(item), target_dir / item.name)
         print(f"Moved files from {checkpoint_dir_prev} to {target_dir}")
     else:
         print("No files to move.")
