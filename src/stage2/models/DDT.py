@@ -281,7 +281,7 @@ class DiTwDDTHead(nn.Module):
             self.dec_feat_rope = VisionRotaryEmbeddingFast(
                 dim=dec_half_head_dim,
                 pt_seq_len=hw_seq_len,
-                num_cls_token=self.registers_len
+                num_cls_token=0 #self.registers_len
             )
         else:
             self.feat_rope = None
@@ -383,14 +383,15 @@ class DiTwDDTHead(nn.Module):
             x = x + self.x_pos_embed
 
         if self.registers_len > 0:
-            registers = s[:, :self.registers_len]
-            x = torch.cat([registers, x], dim=1)
+            #registers = s[:, :self.registers_len]
+            #x = torch.cat([registers, x], dim=1)
+            s = s[:, self.registers_len:]
 
         for i in range(self.num_encoder_blocks, self.num_blocks):
             x = self.blocks[i](x, s, feat_rope=self.dec_feat_rope)
 
         x = self.final_layer(x, s)
-        x = x[:, self.registers_len:]
+        #x = x[:, self.registers_len:]
         x = self.unpatchify(x)
 
         return x
