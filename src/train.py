@@ -123,6 +123,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compile", action="store_true", help="Use torch compile (for rae.encode and model.forward).")
     parser.add_argument("--ckpt", type=str, default=None, help="Optional checkpoint path to resume training.")
     parser.add_argument("--global-seed", type=int, default=None, help="Override training.global_seed from the config.")
+    parser.add_argument("--set", dest="overrides", nargs="*", default=[], metavar="KEY=VALUE",
+                        help="Override any config entry without editing the YAML, e.g. "
+                             "--set stage_2.params.registers_start=8 stage_2.params.registers_in_decoder=learned")
     args = parser.parse_args()
     return args
 
@@ -133,6 +136,10 @@ def main():
         raise RuntimeError("Training currently requires at least one GPU.")
     rank, world_size, device = setup_distributed()
     full_cfg = OmegaConf.load(args.config)
+    if args.overrides:
+        full_cfg = OmegaConf.merge(full_cfg, OmegaConf.from_dotlist(args.overrides))
+        if rank == 0:
+            print(f"Config overrides: {' '.join(args.overrides)}")
     (
         rae_config,
         model_config,

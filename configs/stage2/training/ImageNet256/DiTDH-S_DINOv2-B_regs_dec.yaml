@@ -33,7 +33,7 @@ stage_2:
     use_pos_embed: true
     registers_len: 32
     registers_start: 4
-    registers_in_decoder: false  # false | 'shared' | 'learned'
+    registers_in_decoder: 'learned'  # false | 'shared' | 'learned'
 
 transport:
   params:

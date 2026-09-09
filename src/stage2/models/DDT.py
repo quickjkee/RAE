@@ -199,7 +199,8 @@ class DiTwDDTHead(nn.Module):
             wo_shift=False,
             use_pos_embed: bool = True,
             registers_len=0,
-            registers_start=0
+            registers_start=0,
+            registers_in_decoder=False
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -252,9 +253,25 @@ class DiTwDDTHead(nn.Module):
         # register tokens
         self.registers_len = registers_len
         self.registers_start = registers_start
+        # Where the registers live. False: encoder only, they are dropped before the decoder.
+        # 'shared' (or True): also fed to the decoder stream, carried over from the encoder
+        # register outputs. 'learned': also fed to the decoder stream, but as a separate set
+        # of learnable tokens, which matches how registers are placed in SiT / pDiT.
+        if registers_len <= 0 or registers_in_decoder in (False, None, 'none'):
+            self.registers_in_decoder = False
+        elif registers_in_decoder in (True, 'shared'):
+            self.registers_in_decoder = 'shared'
+        elif registers_in_decoder == 'learned':
+            self.registers_in_decoder = 'learned'
+        else:
+            raise ValueError(f"registers_in_decoder should be False, 'shared' or 'learned', "
+                             f"but got {registers_in_decoder}")
         if self.registers_len > 0:
             self.register_tokens = nn.Parameter(torch.zeros(1, self.registers_len, self.encoder_hidden_size), requires_grad=True)
             torch.nn.init.normal_(self.register_tokens, std=.02)
+            if self.registers_in_decoder == 'learned':
+                self.decoder_register_tokens = nn.Parameter(torch.zeros(1, self.registers_len, self.decoder_hidden_size), requires_grad=True)
+                torch.nn.init.normal_(self.decoder_register_tokens, std=.02)
 
         enc_num_heads = self.num_heads[0]
         dec_num_heads = self.num_heads[1]
@@ -281,8 +298,16 @@ class DiTwDDTHead(nn.Module):
             self.dec_feat_rope = VisionRotaryEmbeddingFast(
                 dim=dec_half_head_dim,
                 pt_seq_len=hw_seq_len,
-                num_cls_token=0 #self.registers_len
+                num_cls_token=0
             )
+            if self.registers_in_decoder:
+                self.dec_feat_rope_registers = VisionRotaryEmbeddingFast(
+                    dim=dec_half_head_dim,
+                    pt_seq_len=hw_seq_len,
+                    num_cls_token=self.registers_len
+                )
+            else:
+                self.dec_feat_rope_registers = None
         else:
             self.feat_rope = None
         self.blocks = nn.ModuleList([
@@ -376,22 +401,35 @@ class DiTwDDTHead(nn.Module):
             t = t.unsqueeze(1).repeat(1, s.shape[1], 1)
             s = nn.functional.silu(t + s)
 
+            # drop the registers here unless the decoder consumes them, so that a cached s
+            # always reaches the decoder in the same form
+            if self.registers_len > 0 and not self.registers_in_decoder:
+                s = s[:, self.registers_len:]
+
         # Decoder
         s = self.s_projector(s)
         x = self.x_embedder(x)
         if self.use_pos_embed and self.x_pos_embed is not None:
             x = x + self.x_pos_embed
 
-        if self.registers_len > 0:
-            #registers = s[:, :self.registers_len]
-            #x = torch.cat([registers, x], dim=1)
-            s = s[:, self.registers_len:]
+        if self.registers_in_decoder:
+            # s still carries the encoder registers in front, and the decoder conditions on
+            # s token by token, so x is padded with registers to keep the two aligned
+            if self.registers_in_decoder == 'learned':
+                registers = self.decoder_register_tokens.expand(x.shape[0], -1, -1)
+            else:
+                registers = s[:, :self.registers_len]
+            x = torch.cat([registers, x], dim=1)
+            dec_feat_rope = self.dec_feat_rope_registers
+        else:
+            dec_feat_rope = self.dec_feat_rope
 
         for i in range(self.num_encoder_blocks, self.num_blocks):
-            x = self.blocks[i](x, s, feat_rope=self.dec_feat_rope)
+            x = self.blocks[i](x, s, feat_rope=dec_feat_rope)
 
         x = self.final_layer(x, s)
-        #x = x[:, self.registers_len:]
+        if self.registers_in_decoder:
+            x = x[:, self.registers_len:]
         x = self.unpatchify(x)
 
         return x
